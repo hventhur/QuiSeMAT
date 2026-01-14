@@ -11,19 +11,27 @@ def extract_tpm_values():
     
     # Read GxH_TPM.tsv into a dictionary
     tpm_data = {}
+    tpm_columns = []  # To store column names dynamically
     try:
         with open('GxH_TPM.tsv', 'r') as f:
             reader = csv.DictReader(f, delimiter='\t')
+            # Get column names, excluding the first column (transcript ID)
+            if reader.fieldnames:
+                # First column is transcript ID, rest are condition/sample columns
+                tpm_columns = [col for col in reader.fieldnames if col]  # Filter empty column names
+                # The first column (if empty name) is the transcript ID column
+                transcript_id_col = reader.fieldnames[0]
+                
             for row in reader:
-                transcript_id = row['']  # First column (transcript ID)
-                tpm_data[transcript_id] = {
-                    'GR1': row['GR1'],
-                    'GR2': row['GR2'],
-                    'GR3': row['GR3'],
-                    'HR1': row['HR1'],
-                    'HR2': row['HR2'],
-                    'HR3': row['HR3']
-                }
+                # Get transcript ID from the first column (may have empty name)
+                transcript_id = row[transcript_id_col] if transcript_id_col in row else list(row.values())[0]
+                
+                # Store all TPM values dynamically
+                tpm_data[transcript_id] = {}
+                for col in tpm_columns:
+                    if col and col in row:
+                        tpm_data[transcript_id][col] = row[col]
+                        
     except Exception as e:
         print(f"Error reading GxH_TPM.tsv: {e}", file=sys.stderr)
         return False
@@ -38,16 +46,14 @@ def extract_tpm_values():
                 database_gene = row['Database_Gene']
                 
                 if transcript in tpm_data:
-                    output_data.append({
+                    # Build output row with database gene, transcript, and all TPM values
+                    output_row = {
                         'Database_Gene': database_gene,
-                        'Matched_Transcript': transcript,
-                        'GR1': tpm_data[transcript]['GR1'],
-                        'GR2': tpm_data[transcript]['GR2'],
-                        'GR3': tpm_data[transcript]['GR3'],
-                        'HR1': tpm_data[transcript]['HR1'],
-                        'HR2': tpm_data[transcript]['HR2'],
-                        'HR3': tpm_data[transcript]['HR3']
-                    })
+                        'Matched_Transcript': transcript
+                    }
+                    # Add all TPM columns dynamically
+                    output_row.update(tpm_data[transcript])
+                    output_data.append(output_row)
                 else:
                     print(f"Warning: Transcript '{transcript}' not found in TPM data", file=sys.stderr)
     except Exception as e:
@@ -57,7 +63,8 @@ def extract_tpm_values():
     # Write output TSV
     try:
         with open('blast_results/annotated_genes_tpm_values.tsv', 'w', newline='') as f:
-            fieldnames = ['Database_Gene', 'Matched_Transcript', 'GR1', 'GR2', 'GR3', 'HR1', 'HR2', 'HR3']
+            # Build fieldnames: Database_Gene, Matched_Transcript, then all TPM columns
+            fieldnames = ['Database_Gene', 'Matched_Transcript'] + tpm_columns
             writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter='\t')
             writer.writeheader()
             writer.writerows(output_data)

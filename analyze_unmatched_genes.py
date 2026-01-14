@@ -8,9 +8,44 @@ import csv
 import sys
 import os
 from collections import defaultdict
+import glob
+
+def find_database_file():
+    """
+    Find the database FASTA file dynamically.
+    Looks for .fasta or .txt files in the current directory.
+    Returns the first matching file found.
+    """
+    # Search for FASTA files first
+    fasta_files = glob.glob('*.fasta') + glob.glob('*.fa') + glob.glob('*.faa') + glob.glob('*.txt')
+    
+    if not fasta_files:
+        raise FileNotFoundError("No database file (.fasta, .fa, .faa, or .txt) found in current directory")
+    
+    # Filter out common non-database files
+    excluded = {'requirements.txt', 'test_script.sh', 'VALIDATION_REPORT.txt'}
+    database_files = [f for f in fasta_files if f not in excluded]
+    
+    if not database_files:
+        raise FileNotFoundError("No suitable database file found in current directory")
+    
+    # Prefer FASTA files over text files
+    fasta_only = [f for f in database_files if f.endswith(('.fasta', '.fa', '.faa'))]
+    selected_file = fasta_only[0] if fasta_only else database_files[0]
+    
+    return selected_file
+
 
 def analyze_unmatched_genes():
     """Analyze genes that didn't pass the filtering criteria."""
+    
+    # Find database file dynamically
+    try:
+        database_file = find_database_file()
+        print(f"ℹ Using database file: {database_file}")
+    except FileNotFoundError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return False
     
     # Read matched genes from the CSV
     matched_genes = set()
@@ -26,7 +61,7 @@ def analyze_unmatched_genes():
     # Read database genes
     database_genes = set()
     try:
-        with open('GmelOBPs.txt', 'r') as f:
+        with open(database_file, 'r') as f:
             for line in f:
                 line = line.strip()
                 if line.startswith('>'):
